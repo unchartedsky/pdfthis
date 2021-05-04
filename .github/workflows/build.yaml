@@ -1,0 +1,62 @@
+name: build
+
+on:
+  push:
+    # Temporarily disable this action
+    # See https://github.community/t/how-can-i-disable-a-github-action/17049
+    # branches-ignore:
+    #   - "**"
+  schedule:
+    # * is a special character in YAML so you have to quote this string
+    # At 05:00 on Sunday
+    # https://crontab.guru/#0_5_*_*_0
+    - cron: "0 4 * * 0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        python-version:
+          - "3.9"
+    steps:
+      - name: Env
+        run: |
+          env | sort
+      - uses: actions/checkout@master
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }} # Version range or exact version of a Python version to use, using SemVer's version range syntax
+          architecture: "x64" # optional x64 or x86. Defaults to x64 if not specified
+      - name: Display Python version
+        run: python -c "import sys; print(sys.version)"
+      - uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      - name: Prepare
+        run: |
+          pip3 install -r requirements.txt
+          # sudo apt-get install -y wget
+          npm install -g percollate
+      - name: Prepare the latest version of wget
+        run: |
+          wget https://ftp.gnu.org/gnu/wget/wget-latest.tar.gz
+          mkdir -p wget-latest && tar xzf wget-latest.tar.gz --strip-components 1 -C wget-latest
+          cd wget-latest
+          ./configure --prefix=/usr      \
+                      --sysconfdir=/etc  \
+                      --with-ssl=openssl
+          make
+      - name: Unit Tests
+        run: |
+          # wget --version
+          # wget --server-response=on -q "https://bit.ly/3aQ1Puy"
+          pytest -v ./tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+          PDFTHIS_TELEGRAM__API_ID: ${{ secrets.PDFTHIS_TELEGRAM__API_ID }}
+          PDFTHIS_TELEGRAM__API_HASH: ${{ secrets.PDFTHIS_TELEGRAM__API_HASH }}
+          PDFTHIS_TELEGRAM__BOT_TOKEN: ${{ secrets.PDFTHIS_TELEGRAM__BOT_TOKEN }}

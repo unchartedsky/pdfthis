@@ -1,0 +1,15 @@
+telethon
+
+dynaconf
+
+email-validator
+urlextract
+
+# Testing
+pytest
+pylint
+pylint-pytest
+
+
+requests
+bs4

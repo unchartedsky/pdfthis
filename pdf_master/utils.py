@@ -58,6 +58,45 @@ def get_pdf_filename(url: str):
         return None
 
 
+def wget_better(url: str, cwd: str = None):
+    filepath = wget(url, cwd)
+    if not filepath:
+        return None
+
+    extracted = _extract_pdftitle(filepath)
+    if not extracted:
+        return filepath
+
+    new_filename = extracted if extracted.endswith('.pdf') else '{}.pdf'.format(extracted)
+
+    dirname = os.path.dirname(filepath)
+    new_filepath = os.path.join(dirname, new_filename)
+
+    os.rename(filepath, new_filepath)
+    return new_filepath
+
+
+def _extract_pdftitle(filepath: str):
+    args_list = [
+        ['pdftitle', "-a", "original", '-p', filepath],
+        ['pdftitle', "-a", "max2", '-p', filepath],
+        ['pdftitle', "-a", "eliot", "--eliot-tfs", "1", '-p', filepath]
+    ]
+
+    for args in args_list:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True
+        )
+        output = result.stdout + result.stderr
+        output = output.strip()
+        if output:
+            return os.path.normpath(output)
+
+    return None
+
+
 def wget(url: str, cwd: str = None):
     if not cwd:
         cwd = os.getcwd()
@@ -81,6 +120,7 @@ def wget(url: str, cwd: str = None):
     os.rename(actual_filepath, right_filepath)
     return right_filepath
 
+
 def _actual_filename(output: str):
     match = re.search(r''' - ‘(.+)’ saved''', output)
     if match and match.regs and len(match.regs) > 0:
@@ -89,8 +129,9 @@ def _actual_filename(output: str):
 
     return None
 
+
 def _right_filename(output: str):
-    match = re.search(r'''Content-Disposition: attachment;filename=(.*\.pdf)[;]*''', output)
+    match = re.search(r'''Content-Disposition: attachment;filename=["]*(.*\.pdf)[";]*''', output)
     if match and match.regs and len(match.regs) > 0:
         location = match.group(1)
         return os.path.basename(location)
@@ -101,6 +142,7 @@ def _right_filename(output: str):
         return os.path.basename(location)
 
     return None
+
 
 def _get_title(url: str):
     r = urlopen(url)

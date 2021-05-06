@@ -50,7 +50,7 @@ async def handle_normal_text(event):
             filename = utils.get_pdf_filename(url)
             if filename:
                 msg = await event.reply('{} is being downloaded...'.format(filename))
-                r = utils.wget(url, cwd=tmpdir)
+                r = utils.wget_better(url, cwd=tmpdir)
                 # msg = await msg.edit('{} is downloaded'.format(filename))
                 await event.client.send_file(event.chat, r, reply_to=msg)
                 continue
@@ -73,7 +73,7 @@ async def echo(event):
         await handle_normal_text(event)
         return
 
-    await event.reply(event.text)
+    await event.reply("Visit https://github.com/unchartedsky/pdfthis and learn how this bot works.")
     raise events.StopPropagation
 
     # file_name = 'unknown name';

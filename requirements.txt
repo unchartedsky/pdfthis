@@ -5,6 +5,8 @@ dynaconf
 email-validator
 urlextract
 
+pdftitle
+
 # Testing
 pytest
 pylint

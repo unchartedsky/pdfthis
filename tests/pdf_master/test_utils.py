@@ -28,6 +28,20 @@ class UtilsTests(unittest.TestCase):
         self.assertTrue(".pdf" in file_path)
         self.assertTrue(os.path.exists(file_path))
 
+    def test_wget_3(self):
+        url = 'https://bit.ly/3edkGly'
+        file_path = utils.wget(url, cwd=self._tmpdir)
+        self.assertTrue(".pdf" in file_path)
+        self.assertTrue('"' not in file_path)
+        self.assertTrue(os.path.exists(file_path))
+
+    def test_wget_better_1(self):
+        url = 'https://bit.ly/3edkGly'
+        file_path = utils.wget_better(url, cwd=self._tmpdir)
+        self.assertTrue(".pdf" in file_path)
+        self.assertTrue('한국' in file_path)
+        self.assertTrue(os.path.exists(file_path))
+
     def test_check_url_has_pdf(self):
         url = "https://bit.ly/3aQ1Puy"
         self.assertTrue('.pdf' in utils.get_pdf_filename(url))

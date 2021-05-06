@@ -15,9 +15,15 @@ class UtilsTests(unittest.TestCase):
         text = "이것은 URLs을 담은 (github.com/uberple) 의미 없는 https://github.com/unchartedsky/ 문장입니다"
         self.assertEqual(len(utils.parse_urls(text)), 2)
 
-    def test_wget(self):
+    def test_wget_1(self):
         url = "https://bit.ly/3aQ1Puy"
 
+        file_path = utils.wget(url, cwd=self._tmpdir)
+        self.assertTrue(".pdf" in file_path)
+        self.assertTrue(os.path.exists(file_path))
+
+    def test_wget_2(self):
+        url = 'https://bit.ly/3tfuGPm'
         file_path = utils.wget(url, cwd=self._tmpdir)
         self.assertTrue(".pdf" in file_path)
         self.assertTrue(os.path.exists(file_path))
@@ -35,7 +41,8 @@ class UtilsTests(unittest.TestCase):
         r = utils.percollate(url, cwd=self._tmpdir)
         self.assertTrue('.pdf' in r)
 
-    def test_get_title(self):
+    def test_get_title_from_itooza(self):
         url = 'https://www.itooza.com/common/iview.php?no=2021050311132007634&smenu=100&ss=99&qSearch=&qText=&qSort='
         r = utils._get_title(url)
         self.assertTrue('강세주' in r)
+

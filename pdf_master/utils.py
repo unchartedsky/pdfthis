@@ -63,23 +63,48 @@ def wget(url: str, cwd: str = None):
         cwd = os.getcwd()
 
     result = subprocess.run(['wget', '--server-response=on',
-                             '--adjust-extension=on', '--trust-server-names=on', '-q', url], capture_output=True,
+                             '--adjust-extension=on', '--trust-server-names=on', url], capture_output=True,
                             text=True, cwd=cwd)
     output = result.stdout + result.stderr
     _logger.debug(output)
 
-    match = re.search(r'''Location: (.*)''', output)
-    if not match or not match.regs or len(match.regs) < 1:
-        return ""
+    actual_filename = _actual_filename(output)
+    if not actual_filename:
+        return None
 
-    location = match.group(1)
-    filename = os.path.basename(location)
-    return os.path.join(cwd, filename)
+    right_filename = _right_filename(output)
+    if actual_filename == right_filename:
+        return os.path.join(cwd, actual_filename)
 
+    actual_filepath = os.path.join(cwd, actual_filename)
+    right_filepath = os.path.join(cwd, right_filename)
+    os.rename(actual_filepath, right_filepath)
+    return right_filepath
+
+def _actual_filename(output: str):
+    match = re.search(r''' - ‘(.+)’ saved''', output)
+    if match and match.regs and len(match.regs) > 0:
+        location = match.group(1)
+        return os.path.basename(location)
+
+    return None
+
+def _right_filename(output: str):
+    match = re.search(r'''Content-Disposition: attachment;filename=(.*\.pdf)[;]*''', output)
+    if match and match.regs and len(match.regs) > 0:
+        location = match.group(1)
+        return os.path.basename(location)
+
+    match = re.search(r'''Location: (.*\.pdf)[;]*''', output)
+    if match and match.regs and len(match.regs) > 0:
+        location = match.group(1)
+        return os.path.basename(location)
+
+    return None
 
 def _get_title(url: str):
-    text = urlopen(url)
-    soup = BeautifulSoup(text, 'html.parser')  # , from_encoding='ISO-8859-1')
+    r = urlopen(url)
+    soup = BeautifulSoup(r, 'html.parser')  # , from_encoding='ISO-8859-1')
     for title in soup.find_all('title'):
         text = title.get_text()
         if text:

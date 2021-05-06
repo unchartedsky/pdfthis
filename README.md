@@ -1,5 +1,7 @@
 # pdfthis
 
+Go to [@pdfthis](https://t.me/pdfthis_bot) and see what it is!
+
 ![build](https://github.com/unchartedsky/pdfthis/workflows/build/badge.svg)
 ![dockerimage](https://github.com/unchartedsky/pdfthis/workflows/dockerimage/badge.svg)
 

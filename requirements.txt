@@ -4,8 +4,11 @@ dynaconf
 
 email-validator
 urlextract
+tldextract
 
 pdftitle
+
+gdown
 
 # Testing
 pytest

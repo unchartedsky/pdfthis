@@ -5,7 +5,7 @@ from telethon import TelegramClient, events
 
 
 class Telegram(unittest.TestCase):
-    def test_send_(self):
+    def test_send(self):
         settings = Dynaconf(
             envvar_prefix="PDFTHIS",
             settings_files=['settings.yaml', '.secrets.yaml'],

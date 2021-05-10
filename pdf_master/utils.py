@@ -3,9 +3,10 @@ import os
 import re
 import subprocess
 import sys
-from urllib.request import urlopen
+import urllib
 
 import requests
+import tldextract
 from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError
 from urlextract import URLExtract
@@ -25,31 +26,82 @@ def check_if_url_is_reachable(url):
         return False
 
 
-def parse_urls(text):
+def _parse_urls(text):
     urls = _extractor.find_urls(text)
     if not urls or len(urls) == 0:
         return []
 
-    links = [("http://" + url if "://" not in url else url) for url in urls]
+    links = []
+    for url in urls:
+        text = "http://" + url if "://" not in url else url
+        r = urllib.request.urlopen(text)
+        links.append(r.url)
+
+    links = [("http://" + url if "://" not in url else url) for url in links]
     links = [url.replace('://blog.naver.com', '://m.blog.naver.com') for url in links]
     return list(set(links))
 
 
+def parse_urls(text):
+    urls = _parse_urls(text)
+
+    allowed = []
+    for url in urls:
+        r = tldextract.extract(url)
+        if not r:
+            continue
+        if not r.registered_domain:
+            continue
+        if r.registered_domain.casefold() == "t.me".casefold():
+            continue
+        allowed.append(url)
+
+    return allowed
+
+
 def get_pdf_filename(url: str):
     try:
-        headers = {'User-agent': 'Mozilla/5.0'}
-        r = requests.get(url, headers=headers)
+        # headers = {'User-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0'}
+        # r = requests.head(url, headers=headers, allow_redirects=True)
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent',
+                       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
+        r = urllib.request.urlopen(req)
 
         content_type = r.headers.get('content-type')
         if not content_type.startswith("application/pdf"):
             return None
 
-        for record in r.history:
-            location = record.headers.get('location')
-            if '.pdf' in location:
-                return os.path.basename(location)
+        filename = r.info().get_filename()
+        if filename and len(filename) > 0:
+            return filename
 
-        return "noname.pdf"
+        # disposition = r.headers.get('Content-Disposition')
+        # if disposition:
+        #     header = urllib.parse.unquote(disposition)
+        #     parsed = rfc6266_parser.parse_headers(disposition)
+        #
+        #     if 'miraeasset.com/bbs' in r.url:
+        #         filename_nfc = normalize('NFC', header)
+        #         header = header.encode('ISO-8859-1').decode('cp949')
+        #     else:
+        #         encoded = header.encode()
+        #         detected_encoding = chardet.detect(encoded).get('encoding')
+        #         if detected_encoding:
+        #             header = encoded.decode(detected_encoding)
+        #     filename = re.findall("filename=(.+)", header)[0]
+        #     return filename
+
+        # for record in r.history:
+        #     location = record.headers.get('location')
+        #     if '.pdf' in location:
+        #         return os.path.basename(location)
+
+        if r.url.endswith('.pdf'):
+            return os.path.basename(r.url)
+
+        return None
+
     except ConnectionError as err:
         _logger.warning(err)
         return None
@@ -59,24 +111,32 @@ def get_pdf_filename(url: str):
 
 
 def wget_better(url: str, cwd: str = None):
+    req = urllib.request.Request(url)
+    req.add_header('User-Agent',
+                   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
+    r = urllib.request.urlopen(req)
+
     filepath = wget(url, cwd)
     if not filepath:
+        _logger.debug("wget has failed.")
         return None
 
     extracted = _extract_pdftitle(filepath)
     if not extracted:
+        _logger.debug("Extracting PDF title is failed.")
         return filepath
 
     new_filename = extracted if extracted.endswith('.pdf') else '{}.pdf'.format(extracted)
 
     dirname = os.path.dirname(filepath)
-    new_filepath = os.path.join(dirname, new_filename)
+    filename = os.path.basename(filepath)
 
-    os.rename(filepath, new_filepath)
-    return new_filepath
+    _logger.debug("wget_better:_mv")
+    return _mv(dirname, filename, new_filename)
 
 
 def _extract_pdftitle(filepath: str):
+    # filepath = f'"{filepath}"'
     args_list = [
         ['pdftitle', "-a", "original", '-p', filepath],
         ['pdftitle', "-a", "max2", '-p', filepath],
@@ -91,6 +151,11 @@ def _extract_pdftitle(filepath: str):
         )
         output = result.stdout + result.stderr
         output = output.strip()
+
+        if result.returncode != 0:
+            _logger.error(output)
+            continue
+
         if output:
             return os.path.normpath(output)
 
@@ -101,51 +166,90 @@ def wget(url: str, cwd: str = None):
     if not cwd:
         cwd = os.getcwd()
 
-    result = subprocess.run(['wget', '--server-response=on',
-                             '--adjust-extension=on', '--trust-server-names=on', url], capture_output=True,
-                            text=True, cwd=cwd)
+    result = subprocess.run([
+        'wget',
+        '--server-response=on', '--no-if-modified-since',
+        '--no-use-server-timestamps', '--adjust-extension=on',
+        '--trust-server-names=on', "--user-agent='Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)'",
+        url],
+        capture_output=True,
+        text=True, cwd=cwd)
     output = result.stdout + result.stderr
+
+    if result.returncode != 0:
+        _logger.error(output)
+        _logger.error("Return value is {}".format(result.returncode))
+        return None
+
     _logger.debug(output)
 
     actual_filename = _actual_filename(output)
     if not actual_filename:
+        _logger.debug("The actual file name is not retrieved.")
         return None
 
     right_filename = _right_filename(output)
     if actual_filename == right_filename:
         return os.path.join(cwd, actual_filename)
 
-    actual_filepath = os.path.join(cwd, actual_filename)
-    right_filepath = os.path.join(cwd, right_filename)
-    os.rename(actual_filepath, right_filepath)
-    return right_filepath
+    _logger.debug("wget:_mv")
+    return _mv(cwd, actual_filename, right_filename)
+
+
+def _mv(cwd, src, dst):
+    _logger.debug("File {} in a directory {} is being moved to {}".format(src, cwd, dst))
+
+    cwd_pushed = os.getcwd()
+    os.chdir(cwd)
+    os.rename(src, dst)
+    os.chdir(cwd_pushed)
+    return os.path.join(cwd, dst)
 
 
 def _actual_filename(output: str):
-    match = re.search(r''' - ‘(.+)’ saved''', output)
+    match = re.search(r''' - [‘'](.+)[’'] saved''', output)
     if match and match.regs and len(match.regs) > 0:
         location = match.group(1)
         return os.path.basename(location)
+
+    # Server file no newer than local file ‘20210429_207940_bhh1026_757.pdf’ -- not retrieving.
+    match = re.search(r'''local file [‘'](.+)[’'] -- not retrieving''', output)
+    if match and match.regs and len(match.regs) > 0:
+        location = match.group(1)
+        return os.path.basename(location)
+
+    if not output.endswith(".pdf"):
+        return '{}.pdf'.format(output)
 
     return None
 
 
 def _right_filename(output: str):
-    match = re.search(r'''Content-Disposition: attachment;filename=["]*(.*\.pdf)[";]*''', output)
+    match = re.search(r'''Content-Disposition:.*filename=["]*(.*\.pdf)[";]*''', output, re.IGNORECASE)
     if match and match.regs and len(match.regs) > 0:
         location = match.group(1)
+        _logger.debug("Header Content-Disposition is found: {}".format(location))
+
+        location = urllib.parse.unquote(location)
+        location = location.replace('/', u'\u2215')  # 파일이름에 '/'가 들어간 경우
+        location = os.path.normpath(location)
         return os.path.basename(location)
 
     match = re.search(r'''Location: (.*\.pdf)[;]*''', output)
     if match and match.regs and len(match.regs) > 0:
         location = match.group(1)
+        _logger.debug("Header Location is found: {}".format(location))
+
         return os.path.basename(location)
 
     return None
 
 
 def _get_title(url: str):
-    r = urlopen(url)
+    req = urllib.request.Request(url)
+    req.add_header('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
+    r = urllib.request.urlopen(req)
+
     soup = BeautifulSoup(r, 'html.parser')  # , from_encoding='ISO-8859-1')
     for title in soup.find_all('title'):
         text = title.get_text()

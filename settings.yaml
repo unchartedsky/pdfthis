@@ -1,1 +1,3 @@
---- {}
+---
+bot:
+  download_dir: /tmp/pdfthis

@@ -21,6 +21,10 @@ bot_token = settings.telegram.bot_token
 
 bot = TelegramClient('pdfthis', api_id, api_hash).start(bot_token=bot_token)
 
+download_dir = settings.bot.download_dir if settings.bot.download_dir else tempfile.mkdtemp()
+if not os.path.exists(download_dir):
+    os.mkdir(download_dir)
+
 
 @bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
@@ -45,18 +49,27 @@ async def handle_normal_text(event):
             await event.respond('You are not registered!')
             return
 
-        tmpdir = tempfile.mkdtemp()
         for url in urls:
+            if 'drive.google.com' in url:
+                msg = await event.reply('Downloading from Google Drive is not supported yet!')
+                # r = gdown.download(url, quiet=False)
+                continue
+
             filename = utils.get_pdf_filename(url)
             if filename:
                 msg = await event.reply('{} is being downloaded...'.format(filename))
-                r = utils.wget_better(url, cwd=tmpdir)
+                r = utils.wget_better(url, cwd=download_dir)
+                if not r:
+                    _logger.error("wget_better has failed.")
+                    continue
+
+                _logger.info('file download is done: {}'.format(r))
                 # msg = await msg.edit('{} is downloaded'.format(filename))
                 await event.client.send_file(event.chat, r, reply_to=msg)
                 continue
 
             msg = await event.reply('The web page is being converted to PDF')
-            r = utils.percollate(url)
+            r = utils.percollate(url, cwd=download_dir)
             # msg = await msg.edit('{} is downloaded'.format(filename))
             await event.client.send_file(event.chat, r, reply_to=msg)
 

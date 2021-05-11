@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import tempfile
 
 from dynaconf import Dynaconf
@@ -50,6 +51,8 @@ async def handle_normal_text(event):
             return
 
         for url in urls:
+            _logger.info('URL is being handled: {}'.format(url))
+
             if 'drive.google.com' in url:
                 msg = await event.reply('Downloading from Google Drive is not supported yet!')
                 # r = gdown.download(url, quiet=False)
@@ -73,9 +76,9 @@ async def handle_normal_text(event):
             # msg = await msg.edit('{} is downloaded'.format(filename))
             await event.client.send_file(event.chat, r, reply_to=msg)
 
-    # except:
-    #     logging.error("Unexpected error:", sys.exc_info()[0])
-    #     raise
+    except:
+        logging.error("Unexpected error:", sys.exc_info()[0])
+        raise
     finally:
         raise events.StopPropagation
 

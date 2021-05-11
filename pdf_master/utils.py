@@ -2,8 +2,8 @@ import logging
 import os
 import re
 import subprocess
-import sys
 import urllib
+from urllib.error import HTTPError
 
 import requests
 import tldextract
@@ -26,6 +26,43 @@ def check_if_url_is_reachable(url):
         return False
 
 
+def _find_js_redirect(r):
+    try:
+        content = r.read().decode()
+
+        match = re.search(r'''^\s*window.location.href\s*=\s*["'](http[s*]://.*)["'].*;''', content,
+                          re.IGNORECASE | re.MULTILINE)
+        if match and match.regs and len(match.regs) > 0:
+            return match.group(1)
+
+        return None
+    except (ConnectionError, HTTPError, UnicodeDecodeError) as err:
+        _logger.warning(err)
+        return None
+
+
+def _parse_url(url):
+    try:
+        text = "http://" + url if "://" not in url else url
+
+        req = urllib.request.Request(text)
+        req.add_header('User-Agent',
+                       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
+        r = urllib.request.urlopen(req)
+
+        js_redirect = _find_js_redirect(r)
+        if js_redirect:
+            return js_redirect
+
+        return r.url
+    except (ConnectionError, HTTPError) as err:
+        _logger.warning(err)
+        return None
+    # except:
+    #     _logger.error("Unexpected error:", sys.exc_info()[0])
+    #     return None
+
+
 def _parse_urls(text):
     urls = _extractor.find_urls(text)
     if not urls or len(urls) == 0:
@@ -33,9 +70,11 @@ def _parse_urls(text):
 
     links = []
     for url in urls:
-        text = "http://" + url if "://" not in url else url
-        r = urllib.request.urlopen(text)
-        links.append(r.url)
+        link = _parse_url(url)
+        if not link:
+            continue
+
+        links.append(link)
 
     links = [("http://" + url if "://" not in url else url) for url in links]
     links = [url.replace('://blog.naver.com', '://m.blog.naver.com') for url in links]
@@ -102,20 +141,15 @@ def get_pdf_filename(url: str):
 
         return None
 
-    except ConnectionError as err:
+    except (ConnectionError, HTTPError) as err:
         _logger.warning(err)
         return None
-    except:
-        _logger.error("Unexpected error:", sys.exc_info()[0])
-        return None
+    # except:
+    #     _logger.error("Unexpected error:", sys.exc_info()[0])
+    #     return None
 
 
 def wget_better(url: str, cwd: str = None):
-    req = urllib.request.Request(url)
-    req.add_header('User-Agent',
-                   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
-    r = urllib.request.urlopen(req)
-
     filepath = wget(url, cwd)
     if not filepath:
         _logger.debug("wget has failed.")
@@ -174,7 +208,9 @@ def wget(url: str, cwd: str = None):
         url],
         capture_output=True,
         text=True, cwd=cwd)
+
     output = result.stdout + result.stderr
+    output = output.strip()
 
     if result.returncode != 0:
         _logger.error(output)
@@ -189,7 +225,7 @@ def wget(url: str, cwd: str = None):
         return None
 
     right_filename = _right_filename(output)
-    if actual_filename == right_filename:
+    if actual_filename == right_filename or not right_filename:
         return os.path.join(cwd, actual_filename)
 
     _logger.debug("wget:_mv")
@@ -246,16 +282,21 @@ def _right_filename(output: str):
 
 
 def _get_title(url: str):
-    req = urllib.request.Request(url)
-    req.add_header('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
-    r = urllib.request.urlopen(req)
+    try:
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent',
+                       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
+        r = urllib.request.urlopen(req)
 
-    soup = BeautifulSoup(r, 'html.parser')  # , from_encoding='ISO-8859-1')
-    for title in soup.find_all('title'):
-        text = title.get_text()
-        if text:
-            return text
-    return None
+        soup = BeautifulSoup(r, 'html.parser')  # , from_encoding='ISO-8859-1')
+        for title in soup.find_all('title'):
+            text = title.get_text()
+            if text:
+                return text
+        return None
+    except (ConnectionError, HTTPError) as err:
+        _logger.warning(err)
+        return None
 
 
 def percollate(url: str, title: str = None, cwd: str = None):
@@ -266,17 +307,26 @@ def percollate(url: str, title: str = None, cwd: str = None):
         title = _get_title(url)
 
     filename = os.path.normpath('{}.pdf'.format(title))
-    _logger.debug(filename)
+
+    cmd = [
+        'percollate', 'pdf', '--no-sandbox', '--css', '''@page { size: A3 }''', url, '-o', filename
+    ]
+    _logger.debug("Percollate is being run: ".join(cmd))
 
     result = subprocess.run(
-        [
-            'percollate', 'pdf', '--no-sandbox', '--css', '''@page { size: A3 }''', url, '-o', filename
-        ],
+        cmd,
         capture_output=True,
         text=True,
         cwd=cwd
     )
+
     output = result.stdout + result.stderr
+    output = output.strip()
+
+    if result.returncode != 0:
+        _logger.error(output)
+        return None
+
     _logger.debug(output)
 
     match = re.search(r'''Saved PDF: (.*)''', output)

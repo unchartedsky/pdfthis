@@ -19,4 +19,5 @@ Telegram bot to convert a web page to a PDF file or download a PDF file from an 
 ## TODO
 
 - [] [Google Drive에서 PDF 파일 다운로드 받기](https://drive.google.com/file/d/1XXVsAD-3uYoYMU-LJZ9AllzREQgNuvIY/view)
-- [] [Twit의 외부 링크를 PDF로 (변환해서) 다운로드 받기](https://twitter.com/Kunbai/status/1391653026885095427?s=20) 
+- [] [Twit의 외부 링크를 PDF로 (변환해서) 다운로드 받기](https://twitter.com/Kunbai/status/1391653026885095427?s=20)
+- [] [라씨로 대응하기](http://spot.rassiro.com/rd/20210511/1445617)

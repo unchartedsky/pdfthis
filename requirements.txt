@@ -8,6 +8,11 @@ tldextract
 
 pdftitle
 Pillow
+FPDF2
+
+markdown2
+markdown-urlize
+
 gdown
 
 # Testing

@@ -22,3 +22,4 @@ Telegram bot to convert a web page to a PDF file or download a PDF file from an 
 - [ ] [Twit의 외부 링크를 PDF로 (변환해서) 다운로드 받기](https://twitter.com/Kunbai/status/1391653026885095427?s=20)
 - [ ] [라씨로 대응하기](http://spot.rassiro.com/rd/20210511/1445617)
 - [x] 사진 파일을 PDF로 변환하기
+- [x] 글을 PDF로 변환하기

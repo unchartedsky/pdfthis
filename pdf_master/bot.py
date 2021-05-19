@@ -1,11 +1,14 @@
 import logging
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
 
 from PIL import Image
 from dynaconf import Dynaconf
+from fpdf import FPDF, HTMLMixin
+from markdown2 import Markdown
 from telethon import TelegramClient, events
 from telethon.tl import types
 
@@ -41,15 +44,53 @@ def wget_download(url):
     return r
 
 
+class PDF(FPDF, HTMLMixin):
+    pass
+
+
+def text_to_pdf(text, filename):
+    fontsize_pt = 10
+    margin_bottom_mm = 10
+
+    pdf = PDF(orientation='P', unit='mm', format='A4')
+    pdf.set_auto_page_break(True, margin=margin_bottom_mm)
+    pdf.add_page()
+    pdf.add_font('NanumGothicCoding', '', 'fonts/NanumGothicCoding-Regular.ttf', uni=True)
+    pdf.set_font('NanumGothicCoding', '', size=fontsize_pt)
+
+    pattern = (
+        r'((([A-Za-z]{3,9}:(?:\/\/)?)'  # scheme
+        r'(?:[\-;:&=\+\$,\w]+@)?[A-Za-z0-9\.\-]+(:\[0-9]+)?'  # user@hostname:port
+        r'|(?:www\.|[\-;:&=\+\$,\w]+@)[A-Za-z0-9\.\-]+)'  # www.|user@hostname
+        r'((?:\/[\+~%\/\.\w\-_]*)?'  # path
+        r'\??(?:[\-\+=&;%@\.\w_]*)'  # query parameters
+        r'#?(?:[\.\!\/\\\w]*))?)'  # fragment
+        r'(?![^<]*?(?:<\/\w+>|\/?>))'  # ignore anchor HTML tags
+        r'(?![^\(]*?\))'  # ignore links in brackets (Markdown links and images)
+    )
+    link_patterns = [(re.compile(pattern), r'\1')]
+    markdown = Markdown(extras=["link-patterns"], link_patterns=link_patterns)
+    html_text = markdown.convert(text)
+    pdf.write_html(html_text)
+
+    pdf.output(filename, 'F')
+
+
 async def handle_normal_text(event):
+    if len(event.text) > 256:
+        msg = event.reply('The message is long so it is converted to a PDF file.')
+        filepath = '{}{}'.format(event.message.date, '.pdf')
+        text_to_pdf(event.text, filepath)
+        await event.client.send_file(event.chat, filepath, reply_to=msg)
+
+    urls = utils.parse_urls(event.text)
+    await handle_urls(event, urls)
+
+
+async def handle_urls(event, urls):
     try:
-        urls = utils.parse_urls(event.text)
         if len(urls) == 0:
             await event.respond("No URLs are found!")
-            return
-
-        if not isinstance(event.chat, types.User):
-            await event.respond('You are not registered!')
             return
 
         for url in urls:
@@ -106,14 +147,9 @@ async def handle_photo(event):
         filepath = os.path.join(download_dir, filename)
         target_path = await event.message.download_media(filepath)
 
-        # target_path = await event.message.download_media()
-        # print(target_path)
         pdfname = '{}{}'.format(Path(target_path).resolve().stem, '.pdf')
         pdfpath = os.path.join(download_dir, pdfname)
 
-        # with open(pdfpath, "wb") as f:
-        #     f.write(img2pdf.convert(target_path))
-        # Creating Image File Object
         with Image.open(target_path) as im:
             # Cheaking if Image File is in 'RGBA' Mode
             if im.mode == "RGBA":
@@ -122,7 +158,7 @@ async def handle_photo(event):
                 # Converting and Saving file in PDF format
             im.save(pdfpath, "PDF")
 
-        await event.client.send_file(event.chat, pdfpath)
+        await event.client.send_file(event.chat, pdfpath, reply_to=event.message)
 
     except:
         logging.error("Unexpected error:", sys.exc_info()[0])
@@ -141,7 +177,8 @@ async def echo(event):
         await handle_photo(event)
         return
 
-    if isinstance(event.message.media, types.MessageMediaDocument) and event.message.media.document.mime_type.startswith('image/'):
+    if isinstance(event.message.media,
+                  types.MessageMediaDocument) and event.message.media.document.mime_type.startswith('image/'):
         await handle_photo(event)
         return
 

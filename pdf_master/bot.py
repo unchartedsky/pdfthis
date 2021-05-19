@@ -2,7 +2,9 @@ import logging
 import os
 import sys
 import tempfile
+from pathlib import Path
 
+from PIL import Image
 from dynaconf import Dynaconf
 from telethon import TelegramClient, events
 from telethon.tl import types
@@ -83,10 +85,64 @@ async def handle_normal_text(event):
         raise events.StopPropagation
 
 
+def get_filename(event):
+    file = event.message.file
+    if file.name:
+        if file.name.endswith(file.ext):
+            return file.name
+        return file.name + file.ext
+
+    return "{}{}".format(file.media.date, file.ext)
+
+
+async def handle_photo(event):
+    try:
+        # photo = event.message.media.photo
+        # if not photo:
+        #     await event.respond("No Photos are found!")
+        #     return
+
+        filename = get_filename(event)
+        filepath = os.path.join(download_dir, filename)
+        target_path = await event.message.download_media(filepath)
+
+        # target_path = await event.message.download_media()
+        # print(target_path)
+        pdfname = '{}{}'.format(Path(target_path).resolve().stem, '.pdf')
+        pdfpath = os.path.join(download_dir, pdfname)
+
+        # with open(pdfpath, "wb") as f:
+        #     f.write(img2pdf.convert(target_path))
+        # Creating Image File Object
+        with Image.open(target_path) as im:
+            # Cheaking if Image File is in 'RGBA' Mode
+            if im.mode == "RGBA":
+                # If in 'RGBA' Mode Convert to 'RGB' Mode
+                im = im.convert("RGB")
+                # Converting and Saving file in PDF format
+            im.save(pdfpath, "PDF")
+
+        await event.client.send_file(event.chat, pdfpath)
+
+    except:
+        logging.error("Unexpected error:", sys.exc_info()[0])
+        raise
+    finally:
+        raise events.StopPropagation
+
+
 @bot.on(events.NewMessage)
 async def echo(event):
     if event.message.media is None or isinstance(event.message.media, types.MessageMediaWebPage):
         await handle_normal_text(event)
+        return
+
+    if isinstance(event.message.media, types.MessageMediaPhoto):
+        await handle_photo(event)
+        return
+
+    if isinstance(event.message.media, types.MessageMediaDocument) and event.message.media.document.mime_type.startswith('image/'):
+        await handle_photo(event)
         return
 
     await event.reply("Visit https://github.com/unchartedsky/pdfthis and learn how this bot works.")

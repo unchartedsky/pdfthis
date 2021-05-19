@@ -7,7 +7,7 @@ urlextract
 tldextract
 
 pdftitle
-
+Pillow
 gdown
 
 # Testing

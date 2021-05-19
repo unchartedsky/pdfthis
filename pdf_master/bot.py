@@ -78,7 +78,7 @@ def text_to_pdf(text, filename):
 
 async def handle_normal_text(event):
     if len(event.text) > 256:
-        msg = event.reply('The message is long so it is converted to a PDF file.')
+        msg = await event.reply('The message is long so it is converted to a PDF file.')
         filepath = '{}{}'.format(event.message.date, '.pdf')
         text_to_pdf(event.text, filepath)
         await event.client.send_file(event.chat, filepath, reply_to=msg)

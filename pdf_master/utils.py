@@ -55,7 +55,7 @@ def _parse_url(url):
             return js_redirect
 
         return r.url
-    except (ConnectionError, HTTPError) as err:
+    except (ConnectionError, HTTPError, urllib.error.URLError) as err:
         _logger.warning(err)
         return None
     # except:
@@ -108,7 +108,7 @@ def get_pdf_filename(url: str):
         r = urllib.request.urlopen(req)
 
         content_type = r.headers.get('content-type')
-        if not content_type.startswith("application/pdf"):
+        if not content_type.startswith("application/pdf") and not content_type.startswith('application/octet-stream'):
             return None
 
         filename = r.info().get_filename()
@@ -161,6 +161,7 @@ def wget_better(url: str, cwd: str = None):
         return filepath
 
     new_filename = extracted if extracted.endswith('.pdf') else '{}.pdf'.format(extracted)
+    new_filename = new_filename.replace('/', u'\u2215')
 
     dirname = os.path.dirname(filepath)
     filename = os.path.basename(filepath)
@@ -276,7 +277,8 @@ def _right_filename(output: str):
         location = match.group(1)
         _logger.debug("Header Location is found: {}".format(location))
 
-        return os.path.basename(location)
+        filename = os.path.basename(location)
+        return filename.replace('/', u'\u2215')
 
     return None
 

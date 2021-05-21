@@ -112,3 +112,8 @@ class UtilsTests(unittest.TestCase):
         url = 'https://www.itooza.com/common/iview.php?no=2021050311132007634&smenu=100&ss=99&qSearch=&qText=&qSort='
         r = utils._get_title(url)
         self.assertTrue('강세주' in r)
+
+    def test_get_pdf_filename(self):
+        url = 'http://bbs2.shinhaninvest.com/board/message/file.do?attachmentId=289356'
+        filename = utils.get_pdf_filename(url)
+        self.assertTrue('bbs' in filename)

@@ -4,6 +4,7 @@ import re
 import sys
 import tempfile
 from pathlib import Path
+import pathlib
 
 from PIL import Image
 from dynaconf import Dynaconf
@@ -31,6 +32,7 @@ download_dir = settings.bot.download_dir if settings.bot.download_dir else tempf
 if not os.path.exists(download_dir):
     os.mkdir(download_dir)
 
+long_message_length = settings.bot.long_message_length
 
 @bot.on(events.NewMessage(pattern='/start'))
 async def start(event):
@@ -55,7 +57,9 @@ def text_to_pdf(text, filename):
     pdf = PDF(orientation='P', unit='mm', format='A4')
     pdf.set_auto_page_break(True, margin=margin_bottom_mm)
     pdf.add_page()
-    pdf.add_font('NanumGothicCoding', '', 'fonts/NanumGothicCoding-Regular.ttf', uni=True)
+
+    font_dir = os.path.join(pathlib.Path().absolute(), 'fonts/')
+    pdf.add_font('NanumGothicCoding', '', os.path.join(font_dir, 'NanumGothicCoding-Regular.ttf'), uni=True)
     pdf.set_font('NanumGothicCoding', '', size=fontsize_pt)
 
     pattern = (
@@ -77,7 +81,7 @@ def text_to_pdf(text, filename):
 
 
 async def handle_normal_text(event):
-    if len(event.text) > 256:
+    if len(event.text) >= long_message_length:
         msg = await event.reply('The message is long so it is converted to a PDF file.')
         filepath = '{}{}'.format(event.message.date, '.pdf')
         text_to_pdf(event.text, filepath)

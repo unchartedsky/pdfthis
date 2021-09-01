@@ -42,9 +42,9 @@ def _find_js_redirect(r):
 
 
 def _parse_url(url):
-    try:
-        text = "http://" + url if "://" not in url else url
+    text = "http://" + url if "://" not in url else url
 
+    try:
         req = urllib.request.Request(text)
         req.add_header('User-Agent',
                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
@@ -57,7 +57,7 @@ def _parse_url(url):
         return r.url
     except (ConnectionError, HTTPError, urllib.error.URLError) as err:
         _logger.warning(err)
-        return None
+        return text
     # except:
     #     _logger.error("Unexpected error:", sys.exc_info()[0])
     #     return None

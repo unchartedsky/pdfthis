@@ -25,6 +25,14 @@ class UtilsTests(unittest.TestCase):
         text = "이것은 URLs을 담은 (github.com/uberple) 의미 없는 https://github.com/unchartedsky/ 문장입니다"
         self.assertEqual(len(utils.parse_urls(text)), 2)
 
+    def test_parse_urls_2(self):
+        text = "https://m.deepsearch.com/analytics/company-analysis/KRX:207940"
+        self.assertEqual(len(utils.parse_urls(text)), 1)
+
+    def test_parse_urls_3(self):
+        text = "https://m.deepsearch.com/KRX:207940"
+        self.assertEqual(len(utils.parse_urls(text)), 1)
+
     def test_parsed_urls_not_include_t_dot_me(self):
         text = '''[미래에셋증권 글로벌 인터넷 정용제]
 페이팔 (PYPL US), 1Q21 리뷰: 강화되는 장기 성장성
@@ -82,6 +90,13 @@ class UtilsTests(unittest.TestCase):
         file_path = utils.wget_better(url, cwd=self._download_dir)
         self.assertTrue(".pdf" in file_path)
         self.assertTrue('페이팔' in file_path)
+        self.assertTrue(os.path.exists(file_path))
+
+    def test_wget_better_3(self):
+        url = "https://bit.ly/3i5GbXs"
+        file_path = utils.wget_better(url, cwd=self._download_dir)
+        self.assertTrue(".pdf" in file_path)
+        self.assertTrue('마이크로소프트' in file_path)
         self.assertTrue(os.path.exists(file_path))
 
     def test_check_url_has_pdf_1(self):

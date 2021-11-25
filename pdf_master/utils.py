@@ -79,6 +79,7 @@ def _parse_urls(text):
     links = [("http://" + url if "://" not in url else url) for url in links]
     links = [url.replace('://blog.naver.com', '://m.blog.naver.com') for url in links]
     links = [url.replace('://cafe.naver.com', '://m.cafe.naver.com') for url in links]
+    links = [url.replace('://post.naver.com', '://m.post.naver.com') for url in links]
     return list(set(links))
 
 

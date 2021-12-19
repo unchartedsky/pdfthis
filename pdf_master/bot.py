@@ -4,7 +4,6 @@ import re
 import sys
 import tempfile
 from pathlib import Path
-import pathlib
 
 from PIL import Image
 from dynaconf import Dynaconf
@@ -58,7 +57,7 @@ def text_to_pdf(text, filename):
     pdf.set_auto_page_break(True, margin=margin_bottom_mm)
     pdf.add_page()
 
-    font_dir = os.path.join(pathlib.Path().absolute(), 'fonts/')
+    font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../fonts/')
     pdf.add_font('NanumGothicCoding', '', os.path.join(font_dir, 'NanumGothicCoding-Regular.ttf'), uni=True)
     pdf.set_font('NanumGothicCoding', '', size=fontsize_pt)
 

@@ -1,15 +1,15 @@
-FROM python:3.9.4-buster
+FROM python:3.10.4-buster
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 
 RUN mkdir -p /usr/local/nvm
 ENV NVM_DIR /usr/local/nvm
-ENV NODE_VERSION 10.15.1
+ENV NODE_VERSION 16.14.2
 
 # install nvm
 # https://github.com/creationix/nvm#install-script
-RUN curl --silent -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+RUN curl --silent -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 
 # install node and npm
 RUN . $NVM_DIR/nvm.sh \

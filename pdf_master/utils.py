@@ -10,6 +10,7 @@ import tldextract
 from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError
 from urlextract import URLExtract
+from slugify import slugify
 
 _logger = logging.getLogger()
 
@@ -309,6 +310,7 @@ def percollate(url: str, title: str = None, cwd: str = None):
 
     if not title:
         title = _get_title(url)
+        title = slugify(title, allow_unicode=True)
 
     filename = os.path.normpath('{}.pdf'.format(title))
 

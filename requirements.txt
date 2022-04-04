@@ -9,6 +9,9 @@ tldextract
 pdftitle
 Pillow
 FPDF2
+PyPDF2
+
+python-slugify
 
 markdown2
 markdown-urlize

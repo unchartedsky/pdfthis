@@ -1,6 +1,5 @@
 import logging
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -9,7 +8,6 @@ import telethon.utils
 from PyPDF2 import PdfFileMerger
 from dynaconf import Dynaconf
 from fpdf import FPDF, HTMLMixin
-from markdown2 import Markdown
 from telethon import TelegramClient, events
 from telethon.tl import types
 
@@ -26,7 +24,9 @@ api_id = settings.telegram.api_id
 api_hash = settings.telegram.api_hash
 bot_token = settings.telegram.bot_token
 
-bot = TelegramClient('pdfthis', api_id, api_hash).start(bot_token=bot_token)
+client = TelegramClient('pdfthis', api_id, api_hash)
+client.parse_mode = 'html'
+bot = client.start(bot_token=bot_token)
 
 download_dir = settings.bot.download_dir if settings.bot.download_dir else tempfile.mkdtemp()
 if not os.path.exists(download_dir):
@@ -55,7 +55,8 @@ async def handle_normal_text(event):
     if len(event.text) >= long_message_length:
         await to_pdf(event)
 
-    urls = utils.parse_urls(event.text)
+    # event.text 는 마크업을 포함하기 때문에 event.message.message를 사용한다
+    urls = utils.parse_urls(event.message.message)
     await handle_urls(event, urls)
 
 
@@ -103,10 +104,16 @@ def get_filename(message, prefix):
     file = message.file
     if file and file.name:
         if file.name.endswith(file.ext):
-            return file.name
-        return file.name + file.ext
+            return utils.slugify_better(file.name)
+        return "{}{}".format(
+            utils.slugify_better(file.name),
+            file.ext
+        )
 
-    return "{} {}{}".format(prefix, file.media.date, file.ext)
+    filename = utils.slugify_better(
+        "{} {}".format(prefix, file.media.date)
+    )
+    return "{}{}".format(filename, file.ext)
 
 
 async def download_media(message, prefix):
@@ -156,9 +163,9 @@ async def to_pdf(event):
     page_w = 297
     pdf = PDF(orientation='P', unit='mm', format=(page_h, page_w))
 
-    font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../fonts/')
-    pdf.add_font('NanumGothicCoding', fname=os.path.join(font_dir, 'NanumGothicCoding-Regular.ttf'))
-    pdf.set_font('NanumGothicCoding', size=fontsize_pt)
+    # font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../fonts/')
+    # pdf.add_font('NanumGothicCoding', fname=os.path.join(font_dir, 'NanumGothicCoding-Regular.ttf'))
+    # pdf.set_font('NanumGothicCoding', size=fontsize_pt)
 
     # pdf.core_fonts_encoding = 'utf-8'
 
@@ -169,13 +176,17 @@ async def to_pdf(event):
     # pdf.oversized_images = "DOWNSCALE"
     pdf.add_page()
 
-    text = ""
+    text_merged = ""
+    msg_merged = ""
     for msg in messages:
+        # text: Markdown, html 등 마크업 포함
         if msg.text:
-            text = "{}{}\n\n".format(text, msg.text)
+            text_merged = "{}{}\n\n".format(text_merged, msg.text)
+        if msg.message:
+            msg_merged = "{}{}\n\n".format(msg_merged, msg.message)
 
-        # if event.message.media is None or isinstance(event.message.media, types.MessageMediaWebPage):
-        #     continue
+        if msg.media is None or isinstance(msg.media, types.MessageMediaWebPage):
+            continue
 
         downloaded_path = await download_media(msg, prefix=display_name)
         # w = msg.photo.sizes[-1].w
@@ -184,37 +195,46 @@ async def to_pdf(event):
 
         pdf.image(downloaded_path, w=w)
 
-    text = text.strip()
-    if text:
+    text_merged = text_merged.strip()
+    if text_merged:
         font_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../fonts/')
         pdf.add_font('NanumGothicCoding', fname=os.path.join(font_dir, 'NanumGothicCoding-Regular.ttf'))
+        pdf.add_font('NanumGothicCoding', style='B', fname=os.path.join(font_dir, 'NanumGothicCoding-Bold.ttf'))
+        pdf.add_font('NanumGothicCoding', style='I', fname=os.path.join(font_dir, 'NanumGothicCoding-Regular.ttf'))
         # pdf.set_font('NanumGothicCoding', size=fontsize_pt)
         pdf.set_font('NanumGothicCoding')
 
-        pattern = (
-            r'((([A-Za-z]{3,9}:(?:\/\/)?)'  # scheme
-            r'(?:[\-;:&=\+\$,\w]+@)?[A-Za-z0-9\.\-]+(:\[0-9]+)?'  # user@hostname:port
-            r'|(?:www\.|[\-;:&=\+\$,\w]+@)[A-Za-z0-9\.\-]+)'  # www.|user@hostname
-            r'((?:\/[\+~%\/\.\w\-_]*)?'  # path
-            r'\??(?:[\-\+=&;%@\.\w_]*)'  # query parameters
-            r'#?(?:[\.\!\/\\\w]*))?)'  # fragment
-            r'(?![^<]*?(?:<\/\w+>|\/?>))'  # ignore anchor HTML tags
-            r'(?![^\(]*?\))'  # ignore links in brackets (Markdown links and images)
-        )
-        link_patterns = [(re.compile(pattern), r'\1')]
-        markdown = Markdown(extras=["link-patterns"], link_patterns=link_patterns)
-        html_text = markdown.convert(text)
+        patterns = [
+            ('<strong>', '<b>'),
+            ('</strong>', '</b>'),
+            ('<em>', '<i>'),
+            ('</em>', '</i>'),
+            ('\n', '<br /><br />')
+        ]
+        html_text = text_merged
+        for pattern in patterns:
+            o, c = pattern
+            html_text = html_text.replace(o, c)
         pdf.write_html(html_text)
 
-    title = get_title(event, text)
+    msg_merged = msg_merged.strip()
+    title = get_title(event, msg_merged)
     # pdf.set_title(title)
 
-    filename = '{}{}'.format(event.original_update.message.date, '.pdf')
+    filename = "{} by {}".format(
+        event.original_update.message.date,
+        display_name
+    )
+    filename = "{}.pdf".format(
+        utils.slugify_better(filename)
+    )
     # filename = '{}{}'.format(title, '.pdf')
     filepath = os.path.join(download_dir, filename)
     pdf.output(filepath)
 
-    renamed_filename = '{}{}'.format(title, '.pdf')
+    renamed_filename = '{}.pdf'.format(
+        utils.slugify_better(title)
+    )
     renamed_filepath = os.path.join(download_dir, renamed_filename)
 
     # pdf.set_title(), pdf.set_author() 가 유니코드 처리를 못 해서 다른 라이브러리로 밀어넣는다.
@@ -247,13 +267,12 @@ def get_title(event, text):
                 return file.name[:-len(file.ext)]
             return file.name
 
-    display_name = get_display_name(event)
-
     if text:
         first_line = text.splitlines()[0]
         title_len = min(len(first_line), 32)
-        return "{} by {}".format(first_line[:title_len], display_name)
+        return "{}".format(first_line[:title_len])
 
+    display_name = get_display_name(event)
     return "{} {}".format(display_name, event.original_update.message.date)
 
 

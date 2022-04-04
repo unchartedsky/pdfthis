@@ -16,6 +16,26 @@ _logger = logging.getLogger()
 
 _extractor = URLExtract()
 
+def slugify_better(text, with_ext=False):
+    # r = text.replace('/', u'\u2215')  # 파일이름에 '/'가 들어간 경우
+    filename = text
+    ext = ''
+    if with_ext:
+        filename = text[:text.find('.')]
+        ext = text.replace(filename, '')
+
+    basename_slugfied = slugify(
+        filename,
+        separator=' ',
+        save_order=True,
+        lowercase=False,
+        entities=True,
+        decimal=True,
+        hexadecimal=True,
+        allow_unicode=True,
+        replacements=[['.', '.'], ['/', u'\u2215']]
+    )
+    return "{}{}".format(basename_slugfied, ext)
 
 def check_if_url_is_reachable(url):
     try:
@@ -117,27 +137,6 @@ def get_pdf_filename(url: str):
         filename = r.info().get_filename()
         if filename and len(filename) > 0:
             return filename
-
-        # disposition = r.headers.get('Content-Disposition')
-        # if disposition:
-        #     header = urllib.parse.unquote(disposition)
-        #     parsed = rfc6266_parser.parse_headers(disposition)
-        #
-        #     if 'miraeasset.com/bbs' in r.url:
-        #         filename_nfc = normalize('NFC', header)
-        #         header = header.encode('ISO-8859-1').decode('cp949')
-        #     else:
-        #         encoded = header.encode()
-        #         detected_encoding = chardet.detect(encoded).get('encoding')
-        #         if detected_encoding:
-        #             header = encoded.decode(detected_encoding)
-        #     filename = re.findall("filename=(.+)", header)[0]
-        #     return filename
-
-        # for record in r.history:
-        #     location = record.headers.get('location')
-        #     if '.pdf' in location:
-        #         return os.path.basename(location)
 
         if r.url.endswith('.pdf'):
             return os.path.basename(r.url)
@@ -271,7 +270,7 @@ def _right_filename(output: str):
         _logger.debug("Header Content-Disposition is found: {}".format(location))
 
         location = urllib.parse.unquote(location)
-        location = location.replace('/', u'\u2215')  # 파일이름에 '/'가 들어간 경우
+        location = slugify_better(location, with_ext=True)
         location = os.path.normpath(location)
         return os.path.basename(location)
 
@@ -281,7 +280,7 @@ def _right_filename(output: str):
         _logger.debug("Header Location is found: {}".format(location))
 
         filename = os.path.basename(location)
-        return filename.replace('/', u'\u2215')
+        return slugify_better(filename, with_ext=True)
 
     return None
 
@@ -310,7 +309,7 @@ def percollate(url: str, title: str = None, cwd: str = None):
 
     if not title:
         title = _get_title(url)
-        title = slugify(title, allow_unicode=True)
+        title = slugify_better(title)
 
     filename = os.path.normpath('{}.pdf'.format(title))
 

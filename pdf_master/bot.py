@@ -3,8 +3,8 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-import gdown
 
+import gdown
 import telethon.utils
 from PyPDF2 import PdfFileMerger
 from dynaconf import Dynaconf
@@ -61,6 +61,18 @@ async def handle_normal_text(event):
     await handle_urls(event, urls)
 
 
+def is_unsupported(url):
+    urls_unsupported = [
+        'truefriend.com'
+    ]
+
+    for url_unsupported in urls_unsupported:
+        if url_unsupported in url:
+            return True
+
+    return False
+
+
 async def handle_urls(event, urls):
     try:
         if len(urls) == 0:
@@ -68,6 +80,10 @@ async def handle_urls(event, urls):
             return
 
         for url in urls:
+            if is_unsupported(url):
+                msg = await event.reply('The site is not supported yet: {}'.format(url))
+                continue
+
             _logger.info('URL is being handled: {}'.format(url))
 
             if 'drive.google.com' in url.lower():

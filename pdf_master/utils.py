@@ -292,7 +292,16 @@ def _get_title(url: str):
                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
         r = urllib.request.urlopen(req)
 
-        soup = BeautifulSoup(r, 'html.parser')  # , from_encoding='ISO-8859-1')
+        # from_encoding = None
+        site_encodings = [
+            ('kmib.co.kr', 'cp-949')
+        ]
+        for site_encoding in site_encodings:
+            site, from_encoding = site_encoding
+            if site in url.lower():
+                break
+
+        soup = BeautifulSoup(r, 'html.parser', from_encoding=from_encoding)
         for title in soup.find_all('title'):
             text = title.get_text()
             if text:

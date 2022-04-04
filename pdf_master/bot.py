@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+import gdown
 
 import telethon.utils
 from PyPDF2 import PdfFileMerger
@@ -69,9 +70,18 @@ async def handle_urls(event, urls):
         for url in urls:
             _logger.info('URL is being handled: {}'.format(url))
 
-            if 'drive.google.com' in url:
-                msg = await event.reply('Downloading from Google Drive is not supported yet!')
-                # r = gdown.download(url, quiet=False)
+            if 'drive.google.com' in url.lower():
+                msg = await event.reply('File is being downloaded from Google Drive...')
+                url = url.replace('usp=drivesdk', 'usp=sharing')
+                # TODO 로컬 경로가 겹칠 수 있을 듯
+                r = gdown.download(url, quiet=False, fuzzy=True)
+                if not r or not '.pdf' in r:
+                    _logger.error("gdown has failed.")
+                    continue
+
+                _logger.info('file download is done: {}'.format(r))
+                # msg = await msg.edit('{} is downloaded'.format(filename))
+                await event.client.send_file(event.chat, r, reply_to=msg)
                 continue
 
             filename = utils.get_pdf_filename(url)

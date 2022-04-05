@@ -4,7 +4,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-import gdown
 import telethon.utils
 from PyPDF2 import PdfFileMerger
 from dynaconf import Dynaconf
@@ -63,7 +62,8 @@ async def handle_normal_text(event):
 
 def is_unsupported(url):
     urls_unsupported = [
-        'truefriend.com'
+        'truefriend.com',
+        'github.com/unchartedsky/pdfthis'
     ]
 
     for url_unsupported in urls_unsupported:
@@ -90,9 +90,8 @@ async def handle_urls(event, urls):
                 msg = await event.reply('File is being downloaded from Google Drive...')
                 url = url.replace('usp=drivesdk', 'usp=sharing')
                 # TODO 로컬 경로가 겹칠 수 있을 듯
-                r = gdown.download(url, quiet=False, fuzzy=True)
-                if not r or not '.pdf' in r:
-                    _logger.error("gdown has failed.")
+                r = utils.gdown_better(url, cwd=download_dir)
+                if not r:
                     continue
 
                 _logger.info('file download is done: {}'.format(r))
@@ -105,7 +104,6 @@ async def handle_urls(event, urls):
                 msg = await event.reply('{} is being downloaded...'.format(filename))
                 r = utils.wget_better(url, cwd=download_dir)
                 if not r:
-                    _logger.error("wget_better has failed.")
                     continue
 
                 _logger.info('file download is done: {}'.format(r))
@@ -181,11 +179,11 @@ async def to_pdf(event):
 
     messages = event.messages if hasattr(event, 'messages') else [event.message]
 
-    fontsize_pt = 10
+    # fontsize_pt = 10
     margin_bottom_mm = 10
 
     # A4: 210 x 297 mm
-    page_h = (210 - 10) / 2
+    page_h = 210 * 2 / 3
     page_w = 297
     pdf = PDF(orientation='P', unit='mm', format=(page_h, page_w))
 
@@ -247,7 +245,7 @@ async def to_pdf(event):
     title = get_title(event, msg_merged)
     # pdf.set_title(title)
 
-    filename = "{} by {}".format(
+    filename = "{}; {}".format(
         event.original_update.message.date,
         display_name
     )
@@ -258,8 +256,12 @@ async def to_pdf(event):
     filepath = os.path.join(download_dir, filename)
     pdf.output(filepath)
 
+    renamed_filename = "{}; {}".format(
+        title,
+        display_name
+    )
     renamed_filename = '{}.pdf'.format(
-        utils.slugify_better(title)
+        utils.slugify_better(renamed_filename)
     )
     renamed_filepath = os.path.join(download_dir, renamed_filename)
 

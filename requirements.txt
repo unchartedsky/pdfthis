@@ -10,6 +10,7 @@ pdftitle
 Pillow
 FPDF2
 PyPDF2
+pdfminer.six
 
 python-slugify
 

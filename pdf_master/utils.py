@@ -3,22 +3,29 @@ import os
 import re
 import subprocess
 import urllib
+from datetime import date
 from urllib.error import HTTPError
 
+import gdown
 import requests
 import tldextract
 from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError
-from urlextract import URLExtract
 from slugify import slugify
+from urlextract import URLExtract
 
 _logger = logging.getLogger()
 
 _extractor = URLExtract()
 
+
+# def slugify_better(text, with_ext=None):
+#     r = text.replace('/', u'\u2215')  # 파일이름에 '/'가 들어간 경우
+#     return r
+
 def slugify_better(text, with_ext=False):
     # r = text.replace('/', u'\u2215')  # 파일이름에 '/'가 들어간 경우
-    filename = text
+    filename = text[:min(len(text), 64)]
     ext = ''
     if with_ext:
         filename = text[:text.find('.')]
@@ -36,6 +43,7 @@ def slugify_better(text, with_ext=False):
         replacements=[['.', '.'], ['/', u'\u2215']]
     )
     return "{}{}".format(basename_slugfied, ext)
+
 
 def check_if_url_is_reachable(url):
     try:
@@ -151,66 +159,160 @@ def get_pdf_filename(url: str):
     #     return None
 
 
+def contains_korean(text):
+    hangul = re.compile('[\u3131-\u3163\uac00-\ud7a3]+')
+    result = hangul.findall(text)
+    return len(result)
+
+
+def gdown_better(url: str, cwd: str = None):
+    cwd_old = os.getcwd()
+    if not cwd:
+        os.chdir(cwd)
+
+    filepath = gdown.download(url, quiet=False, fuzzy=True)
+    if not cwd:
+        os.chdir(cwd_old)
+
+    if not filepath or not '.pdf' in filepath:
+        _logger.error("gdown has failed.")
+        return None
+
+    # if bool(re.match('[a-zA-Z0-9\s]+$', filepath)):
+    if not contains_korean(filepath):
+        return filepath
+
+    return rename_pdf(filepath)
+
+
 def wget_better(url: str, cwd: str = None):
     filepath = wget(url, cwd)
     if not filepath:
         _logger.debug("wget has failed.")
         return None
 
+    return rename_pdf(filepath)
+
+
+def rename_pdf(filepath: str):
     extracted = _extract_pdftitle(filepath)
     if not extracted:
         _logger.debug("Extracting PDF title is failed.")
         return filepath
 
-    new_filename = extracted if extracted.endswith('.pdf') else '{}.pdf'.format(extracted)
-    new_filename = new_filename.replace('/', u'\u2215')
+    if extracted.endswith('.pdf'):
+        new_filename = slugify_better(extracted, True)
+    else:
+        new_filename = '{}.pdf'.format(
+            slugify_better(extracted, False)
+        )
 
     dirname = os.path.dirname(filepath)
     filename = os.path.basename(filepath)
 
-    _logger.debug("wget_better:_mv")
     return _mv(dirname, filename, new_filename)
 
 
-def _extract_pdftitle(filepath: str):
-    # filepath = f'"{filepath}"'
+def _run_pdf_title(args: list):
+    result = subprocess.run(
+        args,
+        capture_output=True,
+        text=True
+    )
+    output = result.stdout + result.stderr
+    output = output.strip()
+
+    if result.returncode != 0:
+        _logger.error(output)
+        return ''
+
+    if output:
+        return os.path.normpath(output)
+
+
+# TODO 일단 지저분하게 구현하자
+def _extract_company(filepath: str):
     args_list = [
         ['pdftitle', "-a", "original", '-p', filepath],
         ['pdftitle', "-a", "max2", '-p', filepath],
-        ['pdftitle', "-a", "eliot", "--eliot-tfs", "1", '-p', filepath]
     ]
 
-    for args in args_list:
-        result = subprocess.run(
-            args,
-            capture_output=True,
-            text=True
+    for i in range(0, 3):
+        args_list.append(
+            ['pdftitle', "-a", "eliot", "--eliot-tfs", "{}".format(i), '-p', filepath]
         )
-        output = result.stdout + result.stderr
-        output = output.strip()
 
-        if result.returncode != 0:
-            _logger.error(output)
+    for args in args_list:
+        title = _run_pdf_title(args)
+        if not title:
             continue
 
-        if output:
-            return os.path.normpath(output)
+    return title
 
-    return None
+
+def _extract_pdfsubtitles(filepath: str):
+    company = _extract_company(filepath)
+    if not company:
+        return ('', '', '')
+
+    comment = ""
+    rate = ""
+
+    for i in range(0, 3):
+        text_args = ['pdftitle', "-a", "eliot", "--eliot-tfs", "{}".format(i), '-p', filepath]
+        text = _run_pdf_title(text_args)
+        if not text:
+            continue
+        if text == company:
+            continue
+
+        text_lowered = text.lower()
+
+        if any(x in text_lowered for x in ['buy', 'overweight', 'sell', 'not rated']):
+            rate = text
+        else:
+            comment = text
+
+        if not comment and not rate:
+            break
+
+    if not comment:
+        comment = date.today().isoformat()
+
+    return (company, comment, rate)
+
+
+def _extract_pdftitle(filepath: str):
+    company, comment, rate = _extract_pdfsubtitles(filepath)
+    if not company:
+        return None
+
+    text = company
+    if comment:
+        text = "{}; {}".format(text, comment)
+    if rate:
+        text = "{}; {}".format(text, rate)
+    return text
 
 
 def wget(url: str, cwd: str = None):
     if not cwd:
         cwd = os.getcwd()
 
-    result = subprocess.run([
-        'wget',
-        '--server-response=on', '--no-if-modified-since',
-        '--no-use-server-timestamps', '--adjust-extension=on',
-        '--trust-server-names=on', "--user-agent='Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)'",
-        url],
+    # with contextlib.suppress(FileNotFoundError):
+    #     os.remove(filename)
+
+    result = subprocess.run(
+        [
+            'wget',
+            '--server-response=on', '--no-if-modified-since',
+            '--no-use-server-timestamps', '--adjust-extension=on',
+            '--trust-server-names=on', "--user-agent='Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)'",
+            url
+        ],
         capture_output=True,
-        text=True, cwd=cwd)
+        text=True, cwd=cwd
+    )
 
     output = result.stdout + result.stderr
     output = output.strip()
@@ -323,7 +425,7 @@ def percollate(url: str, title: str = None, cwd: str = None):
     filename = os.path.normpath('{}.pdf'.format(title))
 
     cmd = [
-        'percollate', 'pdf', '--no-sandbox', '--css', '''@page { size: A3 }''', url, '-o', filename
+        'percollate', 'pdf', '--no-sandbox', '--css', '''@page { size: A4 }''', url, '-o', filename
     ]
     _logger.debug("Percollate is being run: ".join(cmd))
 

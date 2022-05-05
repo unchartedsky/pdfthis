@@ -59,8 +59,8 @@ ENV LNGUAGE ko_KR.UTF-8
 ENV LANG ko_KR.UTF-8
 ENV PYTHONIOENCODING UTF-8
 
-ENV PUPPETEER_PRODUCT chrome
-RUN npm install percollate --unsafe-perm=true
+ENV PUPPETEER_PRODUCT firefox
+RUN npm install percollate puppeteer-cli --unsafe-perm=true
 ENV PATH="/home/app/node_modules/.bin:${PATH}"
 
 ENV PYTHONPATH /home/app

@@ -4,11 +4,13 @@ import re
 import subprocess
 import urllib
 from datetime import date
+from pathlib import Path
 from urllib.error import HTTPError
 
 import gdown
 import requests
 import tldextract
+from PIL import Image
 from bs4 import BeautifulSoup
 from requests.exceptions import ConnectionError
 from slugify import slugify
@@ -406,12 +408,79 @@ def _get_title(url: str):
         soup = BeautifulSoup(r, 'html.parser', from_encoding=from_encoding)
         for title in soup.find_all('title'):
             text = title.get_text()
-            if text:
-                return text
+            if not text:
+                continue
+
+            if text.endswith(" : 네이버 블로그"):
+                return text[:-len(" : 네이버 블로그")]
+
+            return text
+
         return None
     except (ConnectionError, HTTPError) as err:
         _logger.warning(err)
         return None
+
+def to_pdf(url: str, title: str = None, cwd: str = None):
+    files = []
+
+    percollated = percollate(url, title, cwd)
+    if percollated:
+        files.append(percollated)
+
+    if 'blog.naver.com' in url:
+        shotted = screenshot(url, title, cwd)
+        if shotted:
+            files.append(shotted)
+
+    return files
+
+
+def screenshot(url: str, title: str = None, cwd: str = None):
+    if not cwd:
+        cwd = os.getcwd()
+
+    if not title:
+        title = _get_title(url)
+        title = slugify_better(title)
+
+    filename = os.path.normpath('{}.png'.format(title))
+
+    cmd = [
+        'puppeteer', 'screenshot', '--sandbox=false', url, filename
+    ]
+
+    _logger.debug("Puppeteer CLI is being run: ".join(cmd))
+
+    result = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        cwd=cwd
+    )
+
+    output = result.stdout + result.stderr
+    output = output.strip()
+
+    if result.returncode != 0:
+        _logger.error(output)
+        return None
+
+    _logger.debug(output)
+
+    match = re.search(r'''Writing (.*)\nDone''', output)
+    if not match or not match.regs or len(match.regs) < 1:
+        return ""
+
+    matched = match.group(1)
+    output_filename = os.path.basename(matched)
+    img_filepath = os.path.join(cwd, output_filename)
+
+    target_filepath = os.path.join(cwd, f"{Path(output_filename).stem}; 스크린샷.pdf")
+    img = Image.open(img_filepath)
+    rgb = img.convert('RGB')
+    rgb.save(target_filepath)
+    return target_filepath
 
 
 def percollate(url: str, title: str = None, cwd: str = None):
@@ -425,8 +494,9 @@ def percollate(url: str, title: str = None, cwd: str = None):
     filename = os.path.normpath('{}.pdf'.format(title))
 
     cmd = [
-        'percollate', 'pdf', '--no-sandbox', '--css', '''@page { size: A4 }''', url, '-o', filename
+        'percollate', 'pdf', '--no-sandbox', '--inline', '--css', '''@page { size: A4 }''', url, '-o', filename
     ]
+
     _logger.debug("Percollate is being run: ".join(cmd))
 
     result = subprocess.run(

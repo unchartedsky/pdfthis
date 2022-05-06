@@ -112,12 +112,12 @@ async def handle_urls(event, urls):
                 continue
 
             msg = await event.reply('The web page is being converted to PDF')
-            files = utils.to_pdf(url, cwd=download_dir)
-            if not files and len(files) > 0:
+            files = await utils.to_pdf(url, cwd=download_dir)
+            if not files or len(files) < 1:
                 msg = await event.reply('An error occurred while converting the webpage to PDF!')
             # msg = await msg.edit('{} is downloaded'.format(filename))
             for file in files:
-                await event.client.send_file(event.chat, file, reply_to=msg)
+                msg = await event.client.send_file(event.chat, file, reply_to=msg)
 
     except:
         logging.error("Unexpected error:", sys.exc_info()[0])

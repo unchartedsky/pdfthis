@@ -79,7 +79,7 @@ def _parse_url(url):
         req = urllib.request.Request(text)
         req.add_header('User-Agent',
                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:90.0) Gecko/20100101 Firefox/90.0')
-        r = urllib.request.urlopen(req)
+        r = urllib.request.urlopen(req, timeout=5)
 
         js_redirect = _find_js_redirect(r)
         if js_redirect:
@@ -421,22 +421,22 @@ def _get_title(url: str):
         _logger.warning(err)
         return None
 
-def to_pdf(url: str, title: str = None, cwd: str = None):
+async def to_pdf(url: str, title: str = None, cwd: str = None):
     files = []
 
-    percollated = percollate(url, title, cwd)
+    percollated = await percollate(url, title, cwd)
     if percollated:
         files.append(percollated)
 
     if 'blog.naver.com' in url:
-        shotted = screenshot(url, title, cwd)
+        shotted = await screenshot(url, title, cwd)
         if shotted:
             files.append(shotted)
 
     return files
 
 
-def screenshot(url: str, title: str = None, cwd: str = None):
+async def screenshot(url: str, title: str = None, cwd: str = None):
     if not cwd:
         cwd = os.getcwd()
 
@@ -483,7 +483,7 @@ def screenshot(url: str, title: str = None, cwd: str = None):
     return target_filepath
 
 
-def percollate(url: str, title: str = None, cwd: str = None):
+async def percollate(url: str, title: str = None, cwd: str = None):
     if not cwd:
         cwd = os.getcwd()
 

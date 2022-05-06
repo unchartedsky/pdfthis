@@ -113,9 +113,9 @@ class UtilsTests(unittest.TestCase):
         url = "https://github.com"
         self.assertIsNone(utils.get_pdf_filename(url))
 
-    def test_percollate_blog_naver(self):
+    async def test_percollate_blog_naver(self):
         url = 'https://m.blog.naver.com/luy1978/222335229732'
-        r = utils.percollate(url, cwd=self._download_dir)
+        r = await utils.percollate(url, cwd=self._download_dir)
         self.assertTrue('.pdf' in r)
 
     def test_get_title_from_news_naver(self):

@@ -447,7 +447,7 @@ async def screenshot(url: str, title: str = None, cwd: str = None):
     filename = os.path.normpath('{}.png'.format(title))
 
     cmd = [
-        'puppeteer', 'screenshot', '--sandbox=false', url, filename
+        'puppeteer', 'screenshot', '--sandbox=false', '--wait-until=networkidle0', url, filename
     ]
 
     _logger.debug("Puppeteer CLI is being run: ".join(cmd))
